@@ -1,0 +1,173 @@
+# -*- coding: utf-8 -*-
+'''
+通过搜索引擎采集微博事件
+'''
+import datetime
+import re
+import time
+import random
+import xlwt
+from PIL import Image
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+from Bloomfilter import BloomFilter
+
+
+class WeiBo(object):
+
+    def driver(self):
+        '''登录搜索界面
+        :return: browser
+        '''
+        url = 'https://s.weibo.com/weibo?'
+        options = webdriver.ChromeOptions()
+        options.add_argument('lang=zh_CN.UTF-8')
+        options.add_argument(
+            'User-Agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36"')
+        # prefs = {"profile.managed_default_content_settings.images": 2}
+        # options.add_experimental_option("prefs", prefs)
+        # options.add_argument("--headless")
+        # 不自动关闭浏览器
+        options.add_experimental_option("detach", True)
+        browser = webdriver.Chrome(chrome_options=options)
+        # 窗口最大化
+        browser.maximize_window()
+        browser.get(url)
+        time.sleep(5)
+        browser.find_element_by_xpath('//*[@class="woo-box-flex"]/a').click()
+        time.sleep(3)
+        browser.find_element_by_xpath('//*[@id="__sidebar"]/div/div[1]/div[1]/div/button').click()
+        # 截图二维码及处理打开
+        # img_path = './微博登录二维码.png'
+        # browser.save_screenshot(img_path)
+        # print('截取全屏')
+        # QR = browser.find_element_by_class_name('LoginPop_mabox_3Lyr6')  # 定位二维码位置
+        # left = QR.location['x']  # 区块截图左上角在网页中的x坐标
+        # top = QR.location['y']  # 区块截图左上角在网页中的y坐标
+        # right = left + QR.size['width']  # 区块截图右下角在网页中的x坐标
+        # bottom = top + QR.size['height']  # 区块截图右下角在网页中的y坐标
+        # picture = Image.open(img_path)
+        # picture = picture.crop((left, top, right, bottom))  # 二次截图：形成区块截图
+        # picture.save(img_path)
+        # print("--已下载完成二维码--")
+        # img = Image.open(img_path)
+        # img.show()
+        time.sleep(10)  # 等待二维码扫描时间
+        # 传入关键事件
+        browser.find_element_by_xpath(
+            '//*[@id="app"]/div[1]/div[1]/div/div[1]/div/div/div[1]/div/div[2]/div/span/form/div/input').send_keys(
+            event)
+        time.sleep(2)
+        browser.find_element_by_xpath(
+            '//*[@id="app"]/div[1]/div[1]/div/div[1]/div/div/div[1]/div/div[2]/div/span/form/div/input').click()
+        browser.find_element_by_xpath(
+            '//*[@id="app"]/div[1]/div[1]/div/div[1]/div/div/div[1]/div/div[2]/div/span/form/div/input').send_keys(
+            Keys.ENTER)
+        time.sleep(5)
+        handless = browser.window_handles
+        browser.switch_to_window(handless[-1])
+        return browser
+
+    def getInfo(self):
+        '''获取数据
+        :return:
+        '''
+        browser = self.driver()
+        browser.find_element_by_xpath('//*[@id="pl_feedlist_index"]/div[4]/a').click()
+        time.sleep(3)
+        n = 1
+        for a in range(50):
+            infos = browser.find_elements_by_xpath("//*[@id='pl_feedlist_index']/div[1]/div")
+            print('第{}页'.format(a + 1), '···', '一共{}条数据'.format(len(infos)))
+            for i in infos:
+                data = {}
+                print(i)
+                author = ''
+                rele_time = ''
+                txt = ''
+                try:
+                    author = i.find_element_by_xpath('.//div[@class="info"]//div[2]').text
+                    rele_time = i.find_element_by_xpath('.//p[@class="from"]').text
+                    txt = i.find_element_by_xpath('.//p[@class="txt"]').text
+                except:
+                    pass
+                pub_times = rele_time.split('  ')[0]
+                release_time = self.formatTime(pub_times)
+                content = txt.replace(' ', '').replace('\n', '。')
+                data['author'] = author
+                data['release_time'] = release_time
+                data['content'] = content
+                print("data:", data)
+                id_str = author + release_time
+                if id_str and bf.isContains(id_str.encode('utf-8')):
+                    print("已存在,进行去重过滤")
+                    continue
+                else:
+                    toExcel(data, n)
+                    n += 1
+                    bf.insert(id_str.encode('utf-8'))
+                time.sleep(random.random())
+            # 翻页
+            if a == 0:
+                time.sleep(1)
+                browser.find_element_by_xpath('//*[@id="pl_feedlist_index"]/div[2]/div/a').click()
+            else:
+                time.sleep(1)
+                browser.find_element_by_xpath('//*[@id="pl_feedlist_index"]/div[2]/div/a[2]').click()
+            time.sleep(random.randint(1, 4) + random.random())
+
+    def formatTime(self, pub_times):
+        '''时间格式化处理
+        :param pub_times: pub_times
+        :return: new_time
+        '''
+        new_time = ''
+        mat = re.search(r"(\d{4}-\d{1,2}-\d{1,2}\s\d{1,2}:\d{1,2})", pub_times)
+        if mat:
+            pass
+        elif '今天' in pub_times:
+            new_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            # print(new_time)
+        elif '前' in pub_times:
+            new_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            # print(new_time)
+        elif '年' in pub_times:
+            new_time = pub_times.replace('年', '-')
+            new_time = new_time.replace('月', '-')
+            new_time = new_time.replace('日', '')
+            # print(new_time)
+        elif '年' not in pub_times and '今天' not in pub_times:
+            new_time = '2021-' + pub_times
+            new_time = new_time.replace('月', '-')
+            new_time = new_time.replace('日', '')
+        # print(new_time)
+        return new_time
+
+
+def toExcel(data, n):
+    '''数据如表
+    :param data: 数据
+    :param n: 脚标
+    :return:
+    '''
+    worksheet.write(n, 0, data['author'], style)
+    worksheet.write(n, 1, data['release_time'], style)
+    worksheet.write(n, 2, data['content'], style)
+    print('Insert one data···')
+
+
+if __name__ == '__main__':
+    event = '喜茶店员拿错饮料顾客喝下后入院洗胃'
+    # 创建一个workbook
+    workbook = xlwt.Workbook(encoding='utf-8')
+    # 创建一个worksheet
+    worksheet = workbook.add_sheet(event)
+    style = xlwt.XFStyle()  # 初始化样式
+    font = xlwt.Font()  # 为样式创建字体
+    font.name = ''
+    font.bold = True  # 黑体
+    style.font = font  # 设定样式
+    bf = BloomFilter()
+    WeiBo().getInfo()
+    # 保存excel
+    workbook.save(event + '.xls')
