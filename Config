@@ -1,0 +1,8 @@
+# 去重队列的信息
+FILTER_URL = None
+FILTER_HOST = 'localhost'
+FILTER_PORT = 6379
+FILTER_PASSWD = "passwd"
+FILTER_DB = 1
+FILTER_BLOCK = 1
+FILTER_KEY = 'fb_Weibo'
